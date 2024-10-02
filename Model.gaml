@@ -10,7 +10,7 @@ model NewModel5
 
 /* Insert your model definition here */
 global {
-  map<string,rgb> state_colors <- ["N"::#green,"I"::#red,"I1"::#orange,"I2"::#maroon];
+  map<string,rgb> state_colors <- ["N"::#green,"C"::#blue,"I"::#red,"I1"::#orange,"I2"::#maroon];
     int nb_people <- 100;
     int nb_infected <- 8;
     int nb_vectornurse <- 4;
@@ -136,7 +136,8 @@ species room {
 }
 
 species patient {
-    string state <- "N" among:["N","I","I1","I2"];
+    string state <- "N" among:["N","C","I","I1","I2"];
+    int cycle_colonise;
     int cycle_infect;
 
     reflex contact_patient {
@@ -156,11 +157,26 @@ species patient {
             }
         }
     }
+    
+    reflex colonise  when: state="C" {
+    	if world.cycle - cycle_colonise >= recovering_time { 
+           do infected;
+        }        
+        ask patient where (each.state="N") at_distance contact_distance {
+            cycle_colonise <- world.cycle+rnd(-40,50);
+            cycle_infect   <- world.cycle+cycle_colonise+rnd(-40,50);
+            do colonised;
+        }
+        ask nurse where (each.state="N") at_distance contact_distance {
+            do infected;
+        }
+    }
 
     reflex infect when: state="I" {
         ask patient where (each.state="N") at_distance contact_distance {
-            cycle_infect   <- world.cycle+rnd(10,50);
-            do infected;
+            cycle_colonise <- world.cycle+rnd(-40,50);
+            cycle_infect   <- world.cycle+cycle_colonise+rnd(-40,50);
+            do colonised;
         }
         ask nurse where (each.state="N") at_distance contact_distance {
             do infected;
@@ -172,8 +188,9 @@ species patient {
 
     reflex infect_I1 when: state="I1" {
         ask patient where (each.state="N") at_distance contact_distance {
-            cycle_infect   <- world.cycle+rnd(10,50);
-            do infected;
+            cycle_colonise <- world.cycle+rnd(-40,50);
+            cycle_infect   <- world.cycle+cycle_colonise+rnd(-40,50);
+            do colonised;
         }
         ask nurse where (each.state="N") at_distance contact_distance {
             do infected;
@@ -185,8 +202,9 @@ species patient {
 
     reflex infect_I2 when: state="I2" {
         ask patient where (each.state="N") at_distance contact_distance {
-            cycle_infect   <- world.cycle+rnd(10,50);
-            do infected;
+            cycle_colonise <- world.cycle+rnd(-40,50);
+            cycle_infect   <- world.cycle+cycle_colonise+rnd(-40,50);
+            do colonised;
         }
         ask nurse where (each.state="N") at_distance contact_distance {
             do infected;
@@ -196,13 +214,25 @@ species patient {
         }
     }
     
+    action colonised {
+        state <- "C";
+    }
 
     action infected {
-        int random <- rnd(2); 
+        int random <- rnd(4); 
 
         if (random = 0) {
             state <- "I";
-        } else if (random = 1) {
+        }
+        else if (random = 1) {
+            state <- "C";
+            cycle_colonise <- world.cycle+rnd(-40,50);
+            cycle_infect   <- world.cycle+cycle_colonise+rnd(-40,50);
+        }
+        else if (random = 2) {
+            state <- "N";
+        }
+        else if (random = 3) {
             state <- "I1";
         } else {
             state <- "I2";
@@ -239,6 +269,7 @@ species nurse skills: [moving] {
     int last_schedule_time <- 0;
     int resting;
 
+
     action infected {
         state <- "I";
     }
@@ -246,11 +277,13 @@ species nurse skills: [moving] {
     action recovered {
         state <- "N";
     }
+    
 
     reflex infect when: state="I" {
         ask patient where (each.state="N") at_distance contact_distance {
-            cycle_infect   <- world.cycle+rnd(10,50);
-            do infected;
+            cycle_colonise <- world.cycle+rnd(-40,50);
+            cycle_infect   <- world.cycle+cycle_colonise+rnd(-40,50);
+            do colonised;
         }
         ask nurse where (each.state="N") at_distance contact_distance_nurse {
             do infected;
@@ -334,7 +367,7 @@ experiment testmodel type: gui {
         }
         display chart {
             chart "state dynamic" type: series color: #blueviolet {
-                loop stt over: ["N","I","I1","I2"] {
+                loop stt over: ["N","C","I","I1","I2"] {
                     data stt value: patient count (each.state = stt) color: state_colors[stt];
                 }
             }
